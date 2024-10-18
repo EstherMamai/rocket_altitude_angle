@@ -1,6 +1,7 @@
 import cv2
 from roboflow import Roboflow
 import csv
+from calculate import calculate_angle_of_elevation, calculate_altitude
 
 # Initialize Roboflow with your API key
 rf = Roboflow(api_key="amLDwnyGfdSsvyilDr0g")
@@ -11,39 +12,38 @@ model = project.version("2").model
 video_path = "rocket_launch.mp4"  # Replace with your video path
 cap = cv2.VideoCapture(video_path)
 
+
+# Camera and rocket parameters
+camera_fov_vertical = 60  # Vertical field of view of the camera in degrees
+frame_height = 1080  # Height of the video frame in pixels
+camera_distance_to_rocket = 100  # Distance from the camera to the rocket's launch point in meters
+
+# Placeholder for bounding box coordinates (you'll replace this with your YOLO model output)
+bounding_boxes = [
+    {"frame": 1, "center_x": 500, "center_y": 600, "width": 50, "height": 120},
+    {"frame": 2, "center_x": 510, "center_y": 580, "width": 50, "height": 120},
+    {"frame": 3, "center_x": 520, "center_y": 560, "width": 50, "height": 120},
+    # Add more bounding box entries here as needed...
+]
+
 # Open CSV file for writing predictions
-with open('predictions.csv', mode='w', newline='') as file:
+with open('rocket_tracking_data.csv', mode='w', newline='') as file:
     writer = csv.writer(file)
-    writer.writerow(['frame_number', 'class', 'x', 'y', 'width', 'height', 'confidence'])
+    writer.writerow(['frame_number', 'center_x', 'center_y', 'width', 'height', 'angle_of_elevation', 'altitude'])
 
-    # Process video frame by frame
-    frame_number = 0
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # Process each bounding box entry
+    for bbox in bounding_boxes:
+        frame = bbox['frame']
+        center_x = bbox['center_x']
+        center_y = bbox['center_y']
+        width = bbox['width']
+        height = bbox['height']
 
-        # Save frame to a temporary image file
-        frame_path = "temp_frame.jpg"
-        cv2.imwrite(frame_path, frame)
+        # Calculate angle of elevation and altitude
+        angle_of_elevation = calculate_angle_of_elevation(camera_fov_vertical, frame_height, center_y)
+        altitude = calculate_altitude(camera_distance_to_rocket, angle_of_elevation)
 
-        # Run prediction on the saved frame
-        predictions = model.predict(frame_path, confidence=40, overlap=30).json()
+        # Write frame, bounding box, angle, and altitude to CSV
+        writer.writerow([frame, center_x, center_y, width, height, angle_of_elevation, altitude])
 
-        # Write predictions to the CSV file
-        for prediction in predictions['predictions']:
-            writer.writerow([
-                frame_number,
-                prediction['class'],
-                prediction['x'],
-                prediction['y'],
-                prediction['width'],
-                prediction['height'],
-                prediction['confidence']
-            ])
-
-        frame_number += 1
-
-# Release everything
-cap.release()
-cv2.destroyAllWindows()
+print("Tracking data saved to 'rocket_tracking_data.csv'.")
